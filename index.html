@@ -3,111 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=845, height=314, initial-scale=1.0">
-    <title>Novastar Player</title>
+    <title>Novastar Player (Debug Mode)</title>
     <style>
-        /* RESET & SETUP */
-        body, html {
-            margin: 0;
-            padding: 0;
-            background-color: #000; /* Black background for LED */
-            width: 845px;
-            height: 314px;
-            overflow: hidden; /* Hide scrollbars */
-        }
-
-        #container {
-            width: 845px;
-            height: 314px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* CONTENT STYLING */
-        img, video {
-            width: 100%;
-            height: 100%;
-            object-fit: fill; /* Forces content to fill the LED exact pixels */
-            display: none; /* Hidden by default */
-        }
-
-        .active {
-            display: block;
+        body, html { margin: 0; padding: 0; background-color: #000; width: 845px; height: 314px; overflow: hidden; font-family: sans-serif; }
+        #container { width: 845px; height: 314px; display: flex; justify-content: center; align-items: center; position: relative; }
+        img, video { width: 100%; height: 100%; object-fit: fill; display: none; }
+        .active { display: block; }
+        
+        /* Debug Console Styles */
+        #debug {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(50, 0, 0, 0.9); color: #fff; z-index: 999;
+            padding: 20px; box-sizing: border-box; font-size: 18px;
+            white-space: pre-wrap; overflow-y: auto; display: none;
         }
     </style>
 </head>
 <body>
 
     <div id="container">
+        <div id="debug">Initializing Player...</div>
         </div>
 
     <script>
         const container = document.getElementById('container');
+        const debugScreen = document.getElementById('debug');
         let playlist = [];
         let currentIndex = 0;
 
-        // 1. FETCH THE PLAYLIST
-        async function loadPlaylist() {
-            try {
-                // Add a timestamp to prevent caching so updates happen instantly
-                const response = await fetch('playlist.json?t=' + new Date().getTime());
-                playlist = await response.json();
-                playContent();
-            } catch (error) {
-                console.error("Error loading playlist:", error);
-                // Retry after 5 seconds if internet fails
-                setTimeout(loadPlaylist, 5000);
+        // LOGGING FUNCTION (Prints errors to the screen)
+        function log(msg, isError = false) {
+            console.log(msg);
+            if (isError) {
+                debugScreen.style.display = 'block'; // Show red screen
+                debugScreen.innerHTML += `<span style="color:${isError ? '#ff4444' : '#fff'}">${msg}</span><br>`;
             }
         }
 
-        // 2. PLAY CONTENT LOGIC
+        async function loadPlaylist() {
+            try {
+                // Fetch playlist with timestamp to bust cache
+                const response = await fetch('playlist.json?t=' + new Date().getTime());
+                
+                if (!response.ok) {
+                    throw new Error(`Could not find playlist.json (Status: ${response.status})`);
+                }
+
+                const text = await response.text();
+                try {
+                    playlist = JSON.parse(text);
+                } catch (e) {
+                    throw new Error("JSON Syntax Error: You likely missed a comma or have an extra one in playlist.json.");
+                }
+
+                if (playlist.length === 0) {
+                    log("Playlist is empty!", true);
+                    return;
+                }
+
+                // Hide debug screen if successful
+                debugScreen.style.display = 'none';
+                debugScreen.innerHTML = ''; 
+                playContent();
+
+            } catch (error) {
+                log("CRITICAL ERROR: " + error.message, true);
+                setTimeout(loadPlaylist, 5000); // Retry
+            }
+        }
+
         function playContent() {
             if (currentIndex >= playlist.length) {
-                currentIndex = 0; 
-                // Reload playlist on loop restart to check for new ads
-                loadPlaylist(); 
+                currentIndex = 0;
+                loadPlaylist();
                 return;
             }
 
             const item = playlist[currentIndex];
-            container.innerHTML = ''; // Clear screen
+            
+            // Remove old content but keep debug layer
+            Array.from(container.children).forEach(child => {
+                if (child.id !== 'debug') container.removeChild(child);
+            });
 
             if (item.type === 'image') {
                 const img = document.createElement('img');
+                img.onload = () => {
+                    img.classList.add('active');
+                    setTimeout(() => { currentIndex++; playContent(); }, item.duration * 1000);
+                };
+                img.onerror = () => {
+                    log(`ERROR: Could not load image: ${item.url}. Check spelling and capitalization!`, true);
+                    setTimeout(() => { currentIndex++; playContent(); }, 3000); // Skip after 3s
+                };
                 img.src = item.url;
-                img.classList.add('active');
                 container.appendChild(img);
-
-                // Wait for duration then next
-                setTimeout(() => {
-                    currentIndex++;
-                    playContent();
-                }, item.duration * 1000);
 
             } else if (item.type === 'video') {
                 const vid = document.createElement('video');
-                vid.src = item.url;
-                vid.muted = true; // Required for auto-play policy
+                vid.muted = true;
                 vid.autoplay = true;
                 vid.playsInline = true;
+                
+                vid.onended = () => { currentIndex++; playContent(); };
+                vid.onerror = (e) => {
+                    log(`ERROR: Could not load video: ${item.url}. Check spelling!`, true);
+                    setTimeout(() => { currentIndex++; playContent(); }, 3000);
+                };
+
+                vid.src = item.url;
                 vid.classList.add('active');
                 container.appendChild(vid);
-
-                // Wait for video end then next
-                vid.onended = () => {
-                    currentIndex++;
-                    playContent();
-                };
-                
-                // Fallback if video fails
-                vid.onerror = () => {
-                    currentIndex++;
-                    playContent();
-                }
             }
         }
 
-        // Start the engine
         loadPlaylist();
     </script>
 </body>
