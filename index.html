@@ -1,135 +1,280 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=845, height=314, initial-scale=1.0">
-    <title>Novastar Live Feed</title>
-    <style>
-        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
-        #container { width: 845px; height: 314px; position: relative; }
-        
-        /* Media Styling */
-        img, video { 
-            width: 100%; 
-            height: 100%; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            display: none; 
-            object-fit: fill; 
-        }
-        .active { display: block; }
+  <meta charset="UTF-8" />
 
-        /* LIVE Badge */
-        #live-badge {
-            position: absolute; top: 10px; right: 10px;
-            background-color: rgba(255, 0, 0, 0.7); color: white;
-            padding: 2px 6px; font-family: sans-serif; font-size: 10px;
-            font-weight: bold; border-radius: 3px; z-index: 100;
-            pointer-events: none;
-        }
-    </style>
+  <!-- ✅ If your GitHub Pages URL is:
+       https://pickletester.github.io/Screen_ads/
+       keep this. If your repo name changes, update Screen_ads. -->
+  <base href="/Screen_ads/">
+
+  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>TB1 Ads (Synced)</title>
+
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* Full-screen stage */
+    #stage {
+      position: fixed;
+      inset: 0;
+      background: #000;
+    }
+
+    /* If you want "designed at" a specific size, change these.
+       Otherwise, set DESIGN_W/H in JS to match your LED map (e.g., 864x384). */
+    #canvas {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 864px;   /* ✅ CHANGE if your mapping is different */
+      height: 384px;  /* ✅ CHANGE if your mapping is different */
+      transform: translate(-50%, -50%) scale(1);
+      transform-origin: center center;
+      background: #000;
+    }
+
+    .layer {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 220ms linear; /* small crossfade to remove black flash */
+      background: #000;
+    }
+    .layer.show { opacity: 1; }
+
+    .layer img,
+    .layer video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      background: #000;
+    }
+
+    /* Debug overlay only shows if an asset fails */
+    #debug {
+      position: absolute;
+      inset: 0;
+      display: none;
+      z-index: 999;
+      background: rgba(120,0,0,0.88);
+      color: #fff;
+      padding: 12px;
+      box-sizing: border-box;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+  </style>
 </head>
+
 <body>
+  <div id="stage">
+    <div id="canvas">
+      <div id="layerA" class="layer"></div>
+      <div id="layerB" class="layer"></div>
+      <div id="debug"></div>
+    </div>
+  </div>
 
-    <div id="container">
-        <div id="live-badge">🔴 LIVE</div>
-        </div>
+  <script>
+    /********************************************************************
+     * TB1 ADS WINDOW ONLY
+     * - No API calls
+     * - No page refresh
+     * - No "LIVE" label anywhere
+     * - Time-synced across all TB1s (same URL => same spot)
+     * - Crossfade (removes quick black flash)
+     ********************************************************************/
 
-    <script>
-        // ==================================================
-        //        YOUR LIVE PLAYLIST
-        // ==================================================
-        var liveFeed = [
-            { type: 'image', url: 'Applebox.jpg', duration: 10 },
-            { type: 'image', url: 'Comcast.jpg', duration: 10 },
-            { type: 'image', url: 'Feet_DR.jpg', duration: 10 }, 
-            { type: 'image', url: 'Howard_Hannah.jpg', duration: 10 },
-            { type: 'image', url: 'Itaily.jpg', duration: 10 },
-            { type: 'image', url: 'J_Frances2.jpg', duration: 10 },
-            
-            // UPDATED: Lorenzi is now 30 seconds
-            { type: 'image', url: 'Lorenzi.jpg', duration: 30 },
-            
-            { type: 'image', url: 'Mission.jpg', duration: 10 },
-            { type: 'image', url: 'Pickleball_lifeline.jpg', duration: 10 },
-            { type: 'image', url: 'Sun_Chevy.jpg', duration: 10 },
-            { type: 'image', url: 'ad1.jpg', duration: 10 },
-            
-            // ⚠️ CHECK THIS DURATION (currently 15s)
-            { type: 'video', url: 'Screen_2_1.mp4', duration: 15 } 
-        ];
-        // ==================================================
+    // ✅ Set these to your TRUE output/map size for best results:
+    const DESIGN_W = 864;   // change to 845 if that is your real mapped width
+    const DESIGN_H = 384;   // change to 314 if that is your real mapped height
 
+    // Optional per-device timing tweak:
+    // add ?offset=1 or ?offset=-2 at end of URL if a TB1 clock is off
+    const params = new URLSearchParams(location.search);
+    const CLOCK_OFFSET_SEC = parseInt(params.get("offset") || "0", 10) || 0;
 
-        var container = document.getElementById('container');
-        var currentIndex = 0;
+    // ======= PLAYLIST (hardcoded to avoid any fetching/refreshing) =======
+    // IMPORTANT: video.duration MUST match the real length in seconds.
+    const playlist = [
+      { type: "image", url: "Applebox.jpg",          duration: 10 },
+      { type: "image", url: "Comcast.jpg",           duration: 10 },
+      { type: "image", url: "Feet_DR.jpg",           duration: 10 },
+      { type: "image", url: "Howard_Hannah.jpg",     duration: 10 },
+      { type: "image", url: "Itaily.jpg",            duration: 10 },
+      { type: "image", url: "J_Frances2.jpg",        duration: 10 },
+      { type: "image", url: "Lorenzi.jpg",           duration: 10 },
+      { type: "image", url: "Mission.jpg",           duration: 10 },
+      { type: "image", url: "Pickleball_lifeline.jpg",duration: 10 },
+      { type: "image", url: "Sun_Chevy.jpg",         duration: 10 },
+      { type: "image", url: "ad1.jpg",               duration: 10 },
+      { type: "video", url: "Screen_2_1.mp4",        duration: 15 }
+    ];
 
-        function getSyncedStartIndex() {
-            var totalLoopTime = 0;
-            liveFeed.forEach(item => { totalLoopTime += item.duration; });
-            var now = Math.floor(Date.now() / 1000);
-            var timeIntoLoop = now % totalLoopTime;
-            
-            var accumulatedTime = 0;
-            for (var i = 0; i < liveFeed.length; i++) {
-                var itemDuration = liveFeed[i].duration;
-                if (timeIntoLoop < accumulatedTime + itemDuration) {
-                    return { 
-                        index: i, 
-                        remaining: (accumulatedTime + itemDuration) - timeIntoLoop 
-                    };
-                }
-                accumulatedTime += itemDuration;
-            }
-            return { index: 0, remaining: liveFeed[0].duration };
+    // ======= DOM =======
+    const canvas = document.getElementById("canvas");
+    const layerA = document.getElementById("layerA");
+    const layerB = document.getElementById("layerB");
+    const debug  = document.getElementById("debug");
+
+    let front = layerA, back = layerB;
+    let timer = null;
+    let safety = null;
+
+    function fitToScreen() {
+      // Keeps aspect correct on any TB1 window size (no stretching)
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const scale = Math.min(vw / DESIGN_W, vh / DESIGN_H);
+
+      canvas.style.width  = DESIGN_W + "px";
+      canvas.style.height = DESIGN_H + "px";
+      canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+    window.addEventListener("resize", fitToScreen);
+    fitToScreen();
+
+    function nowSec() {
+      return Math.floor(Date.now() / 1000) + CLOCK_OFFSET_SEC;
+    }
+
+    function loopSeconds() {
+      let total = 0;
+      for (const it of playlist) total += it.duration;
+      return total;
+    }
+
+    function syncedPosition() {
+      const L = loopSeconds();
+      const t = ((nowSec() % L) + L) % L;
+      let acc = 0;
+      for (let i = 0; i < playlist.length; i++) {
+        const d = playlist[i].duration;
+        if (t < acc + d) {
+          return { index: i, elapsed: (t - acc), remaining: (acc + d) - t };
+        }
+        acc += d;
+      }
+      return { index: 0, elapsed: 0, remaining: playlist[0].duration };
+    }
+
+    function showError(msg) {
+      console.log(msg);
+      debug.style.display = "block";
+      debug.textContent = msg;
+    }
+    function clearError() {
+      debug.style.display = "none";
+      debug.textContent = "";
+    }
+
+    function clearTimers() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (safety) { clearTimeout(safety); safety = null; }
+    }
+
+    function swapLayers() {
+      const tmp = front;
+      front = back;
+      back = tmp;
+    }
+
+    function crossfade() {
+      back.classList.add("show");
+      front.classList.remove("show");
+      swapLayers();
+    }
+
+    function buildMedia(item) {
+      back.innerHTML = ""; // only clear BACK layer; front stays visible (no black flash)
+
+      if (item.type === "image") {
+        const img = document.createElement("img");
+        img.src = item.url;
+        return new Promise((resolve, reject) => {
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("IMAGE FAILED: " + item.url + "\nCheck filename/case and location."));
+        });
+      }
+
+      if (item.type === "video") {
+        const vid = document.createElement("video");
+        vid.src = item.url;
+        vid.muted = true;         // required for autoplay on TB1/TV browsers
+        vid.playsInline = true;
+        vid.autoplay = false;     // we call play() manually
+        vid.preload = "auto";
+        return new Promise((resolve, reject) => {
+          vid.addEventListener("loadedmetadata", () => resolve(vid), { once: true });
+          vid.addEventListener("error", () => reject(new Error("VIDEO FAILED: " + item.url + "\nIf laggy: re-encode H.264 (Baseline/Main), 30fps, ~4Mbps.")), { once: true });
+        });
+      }
+
+      return Promise.reject(new Error("Unknown type: " + item.type));
+    }
+
+    async function playAt(index, elapsed, remaining) {
+      clearTimers();
+
+      const item = playlist[index];
+      const nextIndex = (index + 1) % playlist.length;
+
+      try {
+        clearError();
+
+        const media = await buildMedia(item);
+        back.appendChild(media);
+
+        if (item.type === "video") {
+          // Seek to the correct synced second (after metadata is loaded)
+          const startAt = Math.max(0, Math.min(item.duration - 0.1, elapsed));
+          try { media.currentTime = startAt; } catch(e) {}
+
+          // Force play (TB1 often needs explicit play())
+          const p = media.play();
+          if (p && p.catch) p.catch(() => {
+            // If a device blocks autoplay, we still advance by timer
+            showError("Autoplay blocked on this device.\nVideo: " + item.url + "\n(Muted is already enabled.)");
+          });
         }
 
-        function playNext(firstRun = false, overrideDuration = null) {
-            if (currentIndex >= liveFeed.length) currentIndex = 0;
-            var item = liveFeed[currentIndex];
-            var durationToPlay = overrideDuration || item.duration;
+        // Fade only after the next asset is ready (prevents black flash)
+        crossfade();
 
-            var children = Array.from(container.children);
-            children.forEach(child => {
-                if(child.id !== 'live-badge') container.removeChild(child);
-            });
+        // Advance by our own clock (more reliable on TB1 than onended)
+        timer = setTimeout(() => {
+          playAt(nextIndex, 0, playlist[nextIndex].duration);
+        }, Math.max(250, remaining * 1000));
 
-            if (item.type === 'image') {
-                var img = document.createElement('img');
-                img.src = item.url;
-                img.className = 'active';
-                container.appendChild(img);
-                setTimeout(function() {
-                    currentIndex++;
-                    playNext();
-                }, durationToPlay * 1000);
-            } 
-            else if (item.type === 'video') {
-                var vid = document.createElement('video');
-                vid.src = item.url;
-                vid.className = 'active';
-                vid.muted = true;
-                vid.autoplay = true;
-                vid.playsInline = true;
-                if (firstRun && overrideDuration) {
-                   vid.currentTime = item.duration - overrideDuration;
-                }
-                vid.onended = function() {
-                    currentIndex++;
-                    playNext();
-                };
-                vid.onerror = function() {
-                    currentIndex++;
-                    playNext();
-                };
-                container.appendChild(vid);
-            }
-        }
+        // Extra safety for TB1 video quirks
+        safety = setTimeout(() => {
+          playAt(nextIndex, 0, playlist[nextIndex].duration);
+        }, Math.max(750, remaining * 1000 + 500));
 
-        var startData = getSyncedStartIndex();
-        currentIndex = startData.index;
-        playNext(true, startData.remaining);
-    </script>
+      } catch (err) {
+        showError(String(err && err.message ? err.message : err));
+        // Skip quickly if something fails
+        timer = setTimeout(() => {
+          playAt(nextIndex, 0, playlist[nextIndex].duration);
+        }, 1200);
+      }
+    }
+
+    // Start synced
+    (function startSynced() {
+      const s = syncedPosition();
+      playAt(s.index, s.elapsed, s.remaining);
+    })();
+  </script>
 </body>
 </html>
