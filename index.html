@@ -14,7 +14,6 @@
       font-family: Arial, Helvetica, sans-serif;
     }
 
-    /* Full window */
     #container{
       position:fixed;
       inset:0;
@@ -22,12 +21,11 @@
       overflow:hidden;
     }
 
-    /* Two layers for crossfade */
     .layer{
       position:absolute;
       inset:0;
       opacity:0;
-      transition: opacity 200ms linear; /* reduce flash */
+      transition: opacity 200ms linear; /* fade removes black flash */
       background:#000;
     }
     .layer.show{ opacity:1; }
@@ -42,9 +40,10 @@
       display:block;
     }
 
-    /* Error overlay (only shows if something fails) */
+    /* Debug overlay shows errors (tap/hover not needed) */
     #debug{
-      position:absolute; inset:0;
+      position:absolute;
+      inset:0;
       background: rgba(120,0,0,0.88);
       color:#fff;
       padding: 12px;
@@ -60,31 +59,37 @@
 
 <body>
   <div id="container">
-    <div id="layerA" class="layer"></div>
+    <div id="layerA" class="layer show"></div>
     <div id="layerB" class="layer"></div>
     <div id="debug">Starting…</div>
   </div>
 
   <script>
-    // =============================
-    // Absolute URL helper (TB1-safe)
-    // =============================
-    function baseDir() {
-      var href = window.location.href.split("#")[0].split("?")[0];
-      if (href.charAt(href.length - 1) === "/") return href;
-      return href.substring(0, href.lastIndexOf("/") + 1);
+    // =========================================================
+    // ✅ IMPORTANT: Set this to your GitHub Pages folder URL
+    // =========================================================
+    var ASSET_BASE = "https://pickletester.github.io/Screen_ads/";
+
+    // Optional: per-device offset tuning:
+    // add ?offset=1 or ?offset=-2 to the URL
+    function getParam(name){
+      var q = window.location.search || "";
+      q = q.replace(/^\?/, "");
+      var parts = q.split("&");
+      for (var i=0;i<parts.length;i++){
+        var kv = parts[i].split("=");
+        if (decodeURIComponent(kv[0]||"") === name) return decodeURIComponent(kv[1]||"");
+      }
+      return "";
     }
-    var BASE = baseDir();
+    var OFFSET = parseInt(getParam("offset") || "0", 10);
+    if (isNaN(OFFSET)) OFFSET = 0;
 
     function absUrl(u){
-      // if already absolute, keep it
       if (/^https?:\/\//i.test(u)) return u;
-      return BASE + u;
+      return ASSET_BASE + u;
     }
 
-    // =============================
-    // DOM
-    // =============================
     var A = document.getElementById("layerA");
     var B = document.getElementById("layerB");
     var debug = document.getElementById("debug");
@@ -105,41 +110,24 @@
       debug.textContent = "";
     }
 
-    // =============================
-    // PLAYLIST (no fetch, no refresh)
-    // =============================
+    // ✅ Your playlist
     var playlist = [
-      { type:"image", url:"Applebox.jpg",            duration:10 },
-      { type:"image", url:"Comcast.jpg",             duration:10 },
-      { type:"image", url:"Feet_DR.jpg",             duration:10 },
-      { type:"image", url:"Howard_Hannah.jpg",       duration:10 },
-      { type:"image", url:"Itaily.jpg",              duration:10 },
-      { type:"image", url:"J_Frances2.jpg",          duration:10 },
-      { type:"image", url:"Lorenzi.jpg",             duration:10 },
-      { type:"image", url:"Mission.jpg",             duration:10 },
-      { type:"image", url:"Pickleball_lifeline.jpg", duration:10 },
-      { type:"image", url:"Sun_Chevy.jpg",           duration:10 },
-      { type:"image", url:"ad1.jpg",                 duration:10 },
-      { type:"video", url:"Screen_2_1.mp4",          duration:15 } // MUST match real length
+      { type:"image", url:"Applebox.jpg",             duration:10 },
+      { type:"image", url:"Comcast.jpg",              duration:10 },
+      { type:"image", url:"Feet_DR.jpg",              duration:10 },
+      { type:"image", url:"Howard_Hannah.jpg",        duration:10 },
+      { type:"image", url:"Itaily.jpg",               duration:10 },
+      { type:"image", url:"J_Frances2.jpg",           duration:10 },
+      { type:"image", url:"Lorenzi.jpg",              duration:10 },
+      { type:"image", url:"Mission.jpg",              duration:10 },
+      { type:"image", url:"Pickleball_lifeline.jpg",  duration:10 },
+      { type:"image", url:"Sun_Chevy.jpg",            duration:10 },
+      { type:"image", url:"ad1.jpg",                  duration:10 },
+      { type:"video", url:"Screen_2_1.mp4",           duration:15 } // MUST match real length
     ];
 
-    // =============================
-    // SYNC
-    // =============================
-    function getParam(name){
-      var q = window.location.search || "";
-      q = q.replace(/^\?/, "");
-      var parts = q.split("&");
-      for (var i=0;i<parts.length;i++){
-        var kv = parts[i].split("=");
-        if (decodeURIComponent(kv[0]||"") === name) return decodeURIComponent(kv[1]||"");
-      }
-      return "";
-    }
-    var OFFSET = parseInt(getParam("offset") || "0", 10);
-    if (isNaN(OFFSET)) OFFSET = 0;
-
     function nowSec(){ return Math.floor(Date.now()/1000) + OFFSET; }
+
     function loopLen(){
       var sum = 0;
       for (var i=0;i<playlist.length;i++) sum += playlist[i].duration;
@@ -161,9 +149,6 @@
       return { index:0, elapsed:0, remaining:playlist[0].duration };
     }
 
-    // =============================
-    // CROSSFADE PLAYER
-    // =============================
     var timer = null;
     var safety = null;
 
@@ -173,21 +158,21 @@
     }
 
     function crossfadeToBack(){
-      // show back, then hide old front
       back.className = "layer show";
       front.className = "layer";
       swapLayers();
     }
 
     function buildMedia(item, onReady, onFail){
-      // only clear BACK layer (front stays visible)
       back.innerHTML = "";
       clearError();
 
       if (item.type === "image"){
         var img = document.createElement("img");
         img.onload = function(){ onReady(img); };
-        img.onerror = function(){ onFail("Image failed: " + item.url); };
+        img.onerror = function(){
+          onFail("IMAGE FAILED:\n" + item.url + "\n\nTried:\n" + absUrl(item.url));
+        };
         img.src = absUrl(item.url);
         return;
       }
@@ -199,9 +184,7 @@
         vid.autoplay = false;
         vid.preload = "auto";
 
-        // Some TB1 builds behave better when we wait for canplay
         var readyFired = false;
-
         vid.onloadedmetadata = function(){
           if (!readyFired) { readyFired = true; onReady(vid); }
         };
@@ -209,7 +192,7 @@
           if (!readyFired) { readyFired = true; onReady(vid); }
         };
         vid.onerror = function(){
-          onFail("Video failed: " + item.url);
+          onFail("VIDEO FAILED:\n" + item.url + "\n\nTried:\n" + absUrl(item.url));
         };
 
         vid.src = absUrl(item.url);
@@ -221,39 +204,31 @@
 
     function playFrom(index, elapsed, remaining){
       clearTimers();
-
       var item = playlist[index];
+      var nextIndex = (index + 1) % playlist.length;
 
       buildMedia(item, function(media){
         back.appendChild(media);
 
         if (item.type === "video"){
-          // seek synced position after metadata/canplay
           var startAt = elapsed;
           if (startAt < 0) startAt = 0;
           if (startAt > item.duration - 0.1) startAt = item.duration - 0.1;
 
           try { media.currentTime = startAt; } catch(e){}
 
-          // Force play (TB1 often needs explicit play)
           try {
             var p = media.play();
             if (p && p.catch) p.catch(function(){});
           } catch(e){}
         }
 
-        // Fade only after next media is ready (prevents black flash)
         crossfadeToBack();
 
-        // Next
-        var nextIndex = (index + 1) % playlist.length;
-
-        // Use timer (more reliable than onended on TB1)
         timer = setTimeout(function(){
           playFrom(nextIndex, 0, playlist[nextIndex].duration);
         }, Math.max(250, remaining * 1000));
 
-        // Safety for TB1 video quirks
         if (item.type === "video"){
           safety = setTimeout(function(){
             playFrom(nextIndex, 0, playlist[nextIndex].duration);
@@ -261,8 +236,7 @@
         }
 
       }, function(errMsg){
-        showError(errMsg + "\n\nCheck GitHub filenames (case-sensitive) and that files are in the same folder as this HTML.");
-        var nextIndex = (index + 1) % playlist.length;
+        showError(errMsg + "\n\nIf this fails on TB1, test opening the asset URL directly on TB1:\n" + absUrl(playlist[0].url));
         timer = setTimeout(function(){
           playFrom(nextIndex, 0, playlist[nextIndex].duration);
         }, 1500);
