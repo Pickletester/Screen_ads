@@ -1,17 +1,57 @@
 [
   {
     "type": "image",
-    "url": "ad1.png",
-    "duration": 10  
-  },
-  {
-    "type": "video",
-    "url": "promo_video.mp4",
-    "duration": 0 
+    "url": "Applebox.jpg",
+    "duration": 10
   },
   {
     "type": "image",
-    "url": "sale_banner.png",
-    "duration": 5
+    "url": "Comcast.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "Feet DR.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "Howard_Hannah.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "Itaily.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "J_Frances2.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "Lorenzi.jpg",
+    "duration": 30
+  },
+  {
+    "type": "image",
+    "url": "Mission.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "Pickleball_lifeline.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "Sun_Chevy.jpg",
+    "duration": 10
+  },
+  {
+    "type": "image",
+    "url": "ad1.jpg",
+    "duration": 10
   }
 ]
