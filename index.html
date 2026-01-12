@@ -8,7 +8,7 @@
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
         #container { width: 845px; height: 314px; position: relative; }
         
-        /* Ensure media fills the exact pixel dimensions */
+        /* Media Styling */
         img, video { 
             width: 100%; 
             height: 100%; 
@@ -19,20 +19,27 @@
             object-fit: fill; 
         }
         .active { display: block; }
+
+        /* LIVE Badge */
+        #live-badge {
+            position: absolute; top: 10px; right: 10px;
+            background-color: rgba(255, 0, 0, 0.7); color: white;
+            padding: 2px 6px; font-family: sans-serif; font-size: 10px;
+            font-weight: bold; border-radius: 3px; z-index: 100;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
     <div id="container">
+        <div id="live-badge">🔴 LIVE</div>
         </div>
 
     <script>
-        // ==========================================
-        //        YOUR LIVE FEED PLAYLIST
-        // ==========================================
-        // To add ads, copy a line and change the filename.
-        // filenames must match GitHub exactly (Case Sensitive!)
-        
+        // ==================================================
+        //        YOUR LIVE PLAYLIST
+        // ==================================================
         var liveFeed = [
             { type: 'image', url: 'Applebox.jpg', duration: 10 },
             { type: 'image', url: 'Comcast.jpg', duration: 10 },
@@ -40,30 +47,28 @@
             { type: 'image', url: 'Howard_Hannah.jpg', duration: 10 },
             { type: 'image', url: 'Itaily.jpg', duration: 10 },
             { type: 'image', url: 'J_Frances2.jpg', duration: 10 },
-            { type: 'image', url: 'Lorenzi.jpg', duration: 10 },
+            
+            // UPDATED: Lorenzi is now 30 seconds
+            { type: 'image', url: 'Lorenzi.jpg', duration: 30 },
+            
             { type: 'image', url: 'Mission.jpg', duration: 10 },
             { type: 'image', url: 'Pickleball_lifeline.jpg', duration: 10 },
             { type: 'image', url: 'Sun_Chevy.jpg', duration: 10 },
             { type: 'image', url: 'ad1.jpg', duration: 10 },
             
-            // ⚠️ SET THIS DURATION TO THE EXACT LENGTH OF YOUR VIDEO (Seconds)
+            // ⚠️ CHECK THIS DURATION (currently 15s)
             { type: 'video', url: 'Screen_2_1.mp4', duration: 15 } 
         ];
+        // ==================================================
 
-        // ==========================================
-        //        ENGINE CODE (DO NOT TOUCH)
-        // ==========================================
+
         var container = document.getElementById('container');
         var currentIndex = 0;
 
         function getSyncedStartIndex() {
             var totalLoopTime = 0;
             liveFeed.forEach(item => { totalLoopTime += item.duration; });
-
-            // Get current Unix time in seconds
             var now = Math.floor(Date.now() / 1000);
-            
-            // Find our position in the global loop
             var timeIntoLoop = now % totalLoopTime;
             
             var accumulatedTime = 0;
@@ -81,21 +86,20 @@
         }
 
         function playNext(firstRun = false, overrideDuration = null) {
-            // Loop back to start if needed
             if (currentIndex >= liveFeed.length) currentIndex = 0;
-
             var item = liveFeed[currentIndex];
             var durationToPlay = overrideDuration || item.duration;
 
-            // Clear previous content
-            container.innerHTML = '';
+            var children = Array.from(container.children);
+            children.forEach(child => {
+                if(child.id !== 'live-badge') container.removeChild(child);
+            });
 
             if (item.type === 'image') {
                 var img = document.createElement('img');
                 img.src = item.url;
                 img.className = 'active';
                 container.appendChild(img);
-
                 setTimeout(function() {
                     currentIndex++;
                     playNext();
@@ -105,39 +109,27 @@
                 var vid = document.createElement('video');
                 vid.src = item.url;
                 vid.className = 'active';
-                vid.muted = true; // Required for auto-play
+                vid.muted = true;
                 vid.autoplay = true;
                 vid.playsInline = true;
-                
-                // If syncing mid-video, jump to the correct second
                 if (firstRun && overrideDuration) {
-                   var startAt = item.duration - overrideDuration;
-                   vid.currentTime = startAt;
+                   vid.currentTime = item.duration - overrideDuration;
                 }
-
-                // When video ends, go next
                 vid.onended = function() {
                     currentIndex++;
                     playNext();
                 };
-                
-                // Safety: If video breaks, skip it instantly
                 vid.onerror = function() {
-                    console.log("Video failed to load: " + item.url);
                     currentIndex++;
                     playNext();
                 };
-                
                 container.appendChild(vid);
             }
         }
 
-        // START THE LIVE FEED
         var startData = getSyncedStartIndex();
         currentIndex = startData.index;
-        console.log("Live Feed Started. Jumped to Item Index: " + currentIndex);
         playNext(true, startData.remaining);
-
     </script>
 </body>
 </html>
