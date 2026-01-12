@@ -3,121 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=845, height=314, initial-scale=1.0">
-    <title>Novastar Player (Debug Mode)</title>
+    <title>Novastar Player (Broadcast Sync)</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #000; width: 845px; height: 314px; overflow: hidden; font-family: sans-serif; }
-        #container { width: 845px; height: 314px; display: flex; justify-content: center; align-items: center; position: relative; }
-        img, video { width: 100%; height: 100%; object-fit: fill; display: none; }
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
+        #container { width: 845px; height: 314px; position: relative; }
+        img, video { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; object-fit: fill; }
         .active { display: block; }
-        
-        /* Debug Console Styles */
-        #debug {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(50, 0, 0, 0.9); color: #fff; z-index: 999;
-            padding: 20px; box-sizing: border-box; font-size: 18px;
-            white-space: pre-wrap; overflow-y: auto; display: none;
-        }
     </style>
 </head>
 <body>
 
     <div id="container">
-        <div id="debug">Initializing Player...</div>
         </div>
 
     <script>
-        const container = document.getElementById('container');
-        const debugScreen = document.getElementById('debug');
-        let playlist = [];
-        let currentIndex = 0;
-
-        // LOGGING FUNCTION (Prints errors to the screen)
-        function log(msg, isError = false) {
-            console.log(msg);
-            if (isError) {
-                debugScreen.style.display = 'block'; // Show red screen
-                debugScreen.innerHTML += `<span style="color:${isError ? '#ff4444' : '#fff'}">${msg}</span><br>`;
-            }
-        }
-
-        async function loadPlaylist() {
-            try {
-                // Fetch playlist with timestamp to bust cache
-                const response = await fetch('playlist.json?t=' + new Date().getTime());
-                
-                if (!response.ok) {
-                    throw new Error(`Could not find playlist.json (Status: ${response.status})`);
-                }
-
-                const text = await response.text();
-                try {
-                    playlist = JSON.parse(text);
-                } catch (e) {
-                    throw new Error("JSON Syntax Error: You likely missed a comma or have an extra one in playlist.json.");
-                }
-
-                if (playlist.length === 0) {
-                    log("Playlist is empty!", true);
-                    return;
-                }
-
-                // Hide debug screen if successful
-                debugScreen.style.display = 'none';
-                debugScreen.innerHTML = ''; 
-                playContent();
-
-            } catch (error) {
-                log("CRITICAL ERROR: " + error.message, true);
-                setTimeout(loadPlaylist, 5000); // Retry
-            }
-        }
-
-        function playContent() {
-            if (currentIndex >= playlist.length) {
-                currentIndex = 0;
-                loadPlaylist();
-                return;
-            }
-
-            const item = playlist[currentIndex];
+        // --- YOUR PLAYLIST ---
+        // IMPORTANT: Set the actual duration for the video!
+        var myAds = [
+            { type: 'image', url: 'Applebox.jpg', duration: 10 },
+            { type: 'image', url: 'Comcast.jpg', duration: 10 },
+            { type: 'image', url: 'Feet_DR.jpg', duration: 10 }, 
+            { type: 'image', url: 'Howard_Hannah.jpg', duration: 10 },
+            { type: 'image', url: 'Itaily.jpg', duration: 10 },
+            { type: 'image', url: 'J_Frances2.jpg', duration: 10 },
+            { type: 'image', url: 'Lorenzi.jpg', duration: 10 },
+            { type: 'image', url: 'Mission.jpg', duration: 10 },
+            { type: 'image', url: 'Pickleball_lifeline.jpg', duration: 10 },
+            { type: 'image', url: 'Sun_Chevy.jpg', duration: 10 },
+            { type: 'image', url: 'ad1.jpg', duration: 10 },
             
-            // Remove old content but keep debug layer
-            Array.from(container.children).forEach(child => {
-                if (child.id !== 'debug') container.removeChild(child);
+            // CHANGE "15" BELOW TO THE EXACT LENGTH OF YOUR VIDEO
+            { type: 'video', url: 'Screen_2_1.mp4', duration: 15 } 
+        ];
+
+        var container = document.getElementById('container');
+        var currentIndex = 0;
+
+        // 1. CALCULATE START TIME BASED ON CLOCK
+        function getSyncedStartIndex() {
+            var totalLoopTime = 0;
+            
+            // Calculate total playlist length
+            myAds.forEach(item => {
+                // Safety: Treat 0 duration as 10s to prevent crash
+                if (!item.duration || item.duration <= 0) item.duration = 10;
+                totalLoopTime += item.duration;
             });
 
+            // Get current time in seconds
+            var now = Math.floor(Date.now() / 1000);
+            
+            // Find where we are in the loop (Modulo)
+            var timeIntoLoop = now % totalLoopTime;
+            
+            var accumulatedTime = 0;
+            for (var i = 0; i < myAds.length; i++) {
+                var itemDuration = myAds[i].duration;
+                
+                // If the current time falls inside this item's window
+                if (timeIntoLoop < accumulatedTime + itemDuration) {
+                    // Return the index and how much time is remaining for this specific ad
+                    return { 
+                        index: i, 
+                        remaining: (accumulatedTime + itemDuration) - timeIntoLoop 
+                    };
+                }
+                accumulatedTime += itemDuration;
+            }
+            return { index: 0, remaining: myAds[0].duration };
+        }
+
+        function playNext(firstRun = false, overrideDuration = null) {
+            var item = myAds[currentIndex];
+            
+            // Clear screen
+            container.innerHTML = '';
+
+            var durationToPlay = overrideDuration || item.duration;
+
             if (item.type === 'image') {
-                const img = document.createElement('img');
-                img.onload = () => {
-                    img.classList.add('active');
-                    setTimeout(() => { currentIndex++; playContent(); }, item.duration * 1000);
-                };
-                img.onerror = () => {
-                    log(`ERROR: Could not load image: ${item.url}. Check spelling and capitalization!`, true);
-                    setTimeout(() => { currentIndex++; playContent(); }, 3000); // Skip after 3s
-                };
+                var img = document.createElement('img');
                 img.src = item.url;
+                img.className = 'active';
                 container.appendChild(img);
 
-            } else if (item.type === 'video') {
-                const vid = document.createElement('video');
+                setTimeout(function() {
+                    currentIndex++;
+                    if (currentIndex >= myAds.length) currentIndex = 0;
+                    playNext();
+                }, durationToPlay * 1000);
+            } 
+            else if (item.type === 'video') {
+                var vid = document.createElement('video');
+                vid.src = item.url;
+                vid.className = 'active';
                 vid.muted = true;
                 vid.autoplay = true;
                 vid.playsInline = true;
                 
-                vid.onended = () => { currentIndex++; playContent(); };
-                vid.onerror = (e) => {
-                    log(`ERROR: Could not load video: ${item.url}. Check spelling!`, true);
-                    setTimeout(() => { currentIndex++; playContent(); }, 3000);
-                };
+                // If we jumped into the middle of a video, try to seek (optional)
+                if (firstRun && overrideDuration) {
+                   vid.currentTime = item.duration - overrideDuration;
+                }
 
-                vid.src = item.url;
-                vid.classList.add('active');
+                // Fallback: Just play to end
+                vid.onended = function() {
+                    currentIndex++;
+                    if (currentIndex >= myAds.length) currentIndex = 0;
+                    playNext();
+                };
+                
+                vid.onerror = function() {
+                    currentIndex++;
+                    if (currentIndex >= myAds.length) currentIndex = 0;
+                    playNext();
+                };
+                
                 container.appendChild(vid);
             }
         }
 
-        loadPlaylist();
+        // Start the engine
+        var startData = getSyncedStartIndex();
+        currentIndex = startData.index;
+        
+        // Log for testing
+        console.log("Syncing to TV Mode... Starting at Index: " + currentIndex);
+        
+        // Start playing with the calculated remaining time for the first item
+        playNext(true, startData.remaining);
+
     </script>
 </body>
 </html>
