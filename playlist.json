@@ -1,0 +1,17 @@
+[
+  {
+    "type": "image",
+    "url": "ad1.png",
+    "duration": 10  
+  },
+  {
+    "type": "video",
+    "url": "promo_video.mp4",
+    "duration": 0 
+  },
+  {
+    "type": "image",
+    "url": "sale_banner.png",
+    "duration": 5
+  }
+]
