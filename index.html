@@ -1,254 +1,155 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>TB1 Synced Ads</title>
+<script>
+  const A = document.getElementById("layerA");
+  const B = document.getElementById("layerB");
+  const debug = document.getElementById("debug");
 
-  <style>
-    html, body{
-      margin:0; padding:0;
-      width:100vw; height:100vh;
-      overflow:hidden;
-      background:#000;
-      font-family: Arial, Helvetica, sans-serif;
-    }
+  let front = A, back = B;
 
-    #container{
-      position:fixed;
-      inset:0;
-      background:#000;
-      overflow:hidden;
-    }
+  function swapLayers(){
+    const tmp = front; front = back; back = tmp;
+  }
 
-    .layer{
-      position:absolute;
-      inset:0;
-      opacity:0;
-      transition: opacity 200ms linear; /* fade removes black flash */
-      background:#000;
-    }
-    .layer.show{ opacity:1; }
+  function showError(msg){
+    console.log(msg);
+    debug.style.display = "block";
+    debug.textContent = msg;
+  }
+  function clearError(){ debug.style.display="none"; debug.textContent=""; }
 
-    .layer img, .layer video{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      object-fit: fill;
-      background:#000;
-      display:block;
-    }
+  // ====== YOUR PLAYLIST (or fetched playlist.json) ======
+  let playlist = [
+    { type:"image", url:"Applebox.jpg", duration:10 },
+    { type:"image", url:"Comcast.jpg", duration:10 },
+    { type:"image", url:"Feet_DR.jpg", duration:10 },
+    { type:"image", url:"Howard_Hannah.jpg", duration:10 },
+    { type:"image", url:"Itaily.jpg", duration:10 },
+    { type:"image", url:"J_Frances2.jpg", duration:10 },
+    { type:"image", url:"Lorenzi.jpg", duration:10 },
+    { type:"image", url:"Mission.jpg", duration:10 },
+    { type:"image", url:"Pickleball_lifeline.jpg", duration:10 },
+    { type:"image", url:"Sun_Chevy.jpg", duration:10 },
+    { type:"image", url:"ad1.jpg", duration:10 },
+    { type:"video", url:"Screen_2_1.mp4", duration:15 }
+  ];
 
-    /* Debug overlay shows errors (tap/hover not needed) */
-    #debug{
-      position:absolute;
-      inset:0;
-      background: rgba(120,0,0,0.88);
-      color:#fff;
-      padding: 12px;
-      box-sizing: border-box;
-      font-size: 14px;
-      white-space: pre-wrap;
-      overflow:auto;
-      display:none;
-      z-index:999;
-    }
-  </style>
-</head>
+  // ====== SYNC ======
+  const params = new URLSearchParams(location.search);
+  const OFFSET = parseInt(params.get("offset") || "0", 10) || 0;
 
-<body>
-  <div id="container">
-    <div id="layerA" class="layer show"></div>
-    <div id="layerB" class="layer"></div>
-    <div id="debug">Starting…</div>
-  </div>
+  function nowSec(){ return Math.floor(Date.now()/1000) + OFFSET; }
+  function loopLen(){ return playlist.reduce((s,i)=>s+i.duration,0); }
 
-  <script>
-    // =========================================================
-    // ✅ IMPORTANT: Set this to your GitHub Pages folder URL
-    // =========================================================
-    var ASSET_BASE = "https://pickletester.github.io/Screen_ads/";
-
-    // Optional: per-device offset tuning:
-    // add ?offset=1 or ?offset=-2 to the URL
-    function getParam(name){
-      var q = window.location.search || "";
-      q = q.replace(/^\?/, "");
-      var parts = q.split("&");
-      for (var i=0;i<parts.length;i++){
-        var kv = parts[i].split("=");
-        if (decodeURIComponent(kv[0]||"") === name) return decodeURIComponent(kv[1]||"");
+  function getSynced(){
+    const L = loopLen();
+    const t = ((nowSec() % L) + L) % L;
+    let acc = 0;
+    for (let i=0;i<playlist.length;i++){
+      const d = playlist[i].duration;
+      if (t < acc + d){
+        return { index:i, elapsed:t-acc, remaining:(acc+d)-t };
       }
-      return "";
+      acc += d;
     }
-    var OFFSET = parseInt(getParam("offset") || "0", 10);
-    if (isNaN(OFFSET)) OFFSET = 0;
+    return { index:0, elapsed:0, remaining:playlist[0].duration };
+  }
 
-    function absUrl(u){
-      if (/^https?:\/\//i.test(u)) return u;
-      return ASSET_BASE + u;
-    }
+  // ====== CROSSFADE PLAYER ======
+  let timer = null;
+  let safety = null;
 
-    var A = document.getElementById("layerA");
-    var B = document.getElementById("layerB");
-    var debug = document.getElementById("debug");
+  function clearTimers(){
+    if (timer) clearTimeout(timer);
+    if (safety) clearTimeout(safety);
+    timer = safety = null;
+  }
 
-    var front = A, back = B;
+  function buildMedia(item){
+    back.innerHTML = ""; // only clear BACK layer (front stays visible)
+    clearError();
 
-    function swapLayers(){
-      var tmp = front; front = back; back = tmp;
-    }
+    if (item.type === "image"){
+      const img = document.createElement("img");
+      img.src = item.url;
 
-    function showError(msg){
-      try { console.log(msg); } catch(e){}
-      debug.style.display = "block";
-      debug.textContent = msg;
-    }
-    function clearError(){
-      debug.style.display = "none";
-      debug.textContent = "";
-    }
-
-    // ✅ Your playlist
-    var playlist = [
-      { type:"image", url:"Applebox.jpg",             duration:10 },
-      { type:"image", url:"Comcast.jpg",              duration:10 },
-      { type:"image", url:"Feet_DR.jpg",              duration:10 },
-      { type:"image", url:"Howard_Hannah.jpg",        duration:10 },
-      { type:"image", url:"Itaily.jpg",               duration:10 },
-      { type:"image", url:"J_Frances2.jpg",           duration:10 },
-      { type:"image", url:"Lorenzi.jpg",              duration:10 },
-      { type:"image", url:"Mission.jpg",              duration:10 },
-      { type:"image", url:"Pickleball_lifeline.jpg",  duration:10 },
-      { type:"image", url:"Sun_Chevy.jpg",            duration:10 },
-      { type:"image", url:"ad1.jpg",                  duration:10 },
-      { type:"video", url:"Screen_2_1.mp4",           duration:15 } // MUST match real length
-    ];
-
-    function nowSec(){ return Math.floor(Date.now()/1000) + OFFSET; }
-
-    function loopLen(){
-      var sum = 0;
-      for (var i=0;i<playlist.length;i++) sum += playlist[i].duration;
-      return sum;
-    }
-
-    function getSynced(){
-      var L = loopLen();
-      var t = ((nowSec() % L) + L) % L;
-      var acc = 0;
-
-      for (var i=0;i<playlist.length;i++){
-        var d = playlist[i].duration;
-        if (t < acc + d){
-          return { index:i, elapsed:(t-acc), remaining:(acc+d)-t };
-        }
-        acc += d;
-      }
-      return { index:0, elapsed:0, remaining:playlist[0].duration };
-    }
-
-    var timer = null;
-    var safety = null;
-
-    function clearTimers(){
-      if (timer) { clearTimeout(timer); timer = null; }
-      if (safety) { clearTimeout(safety); safety = null; }
-    }
-
-    function crossfadeToBack(){
-      back.className = "layer show";
-      front.className = "layer";
-      swapLayers();
-    }
-
-    function buildMedia(item, onReady, onFail){
-      back.innerHTML = "";
-      clearError();
-
-      if (item.type === "image"){
-        var img = document.createElement("img");
-        img.onload = function(){ onReady(img); };
-        img.onerror = function(){
-          onFail("IMAGE FAILED:\n" + item.url + "\n\nTried:\n" + absUrl(item.url));
-        };
-        img.src = absUrl(item.url);
-        return;
-      }
-
-      if (item.type === "video"){
-        var vid = document.createElement("video");
-        vid.muted = true;
-        vid.playsInline = true;
-        vid.autoplay = false;
-        vid.preload = "auto";
-
-        var readyFired = false;
-        vid.onloadedmetadata = function(){
-          if (!readyFired) { readyFired = true; onReady(vid); }
-        };
-        vid.oncanplay = function(){
-          if (!readyFired) { readyFired = true; onReady(vid); }
-        };
-        vid.onerror = function(){
-          onFail("VIDEO FAILED:\n" + item.url + "\n\nTried:\n" + absUrl(item.url));
-        };
-
-        vid.src = absUrl(item.url);
-        return;
-      }
-
-      onFail("Unknown type: " + item.type);
-    }
-
-    function playFrom(index, elapsed, remaining){
-      clearTimers();
-      var item = playlist[index];
-      var nextIndex = (index + 1) % playlist.length;
-
-      buildMedia(item, function(media){
-        back.appendChild(media);
-
-        if (item.type === "video"){
-          var startAt = elapsed;
-          if (startAt < 0) startAt = 0;
-          if (startAt > item.duration - 0.1) startAt = item.duration - 0.1;
-
-          try { media.currentTime = startAt; } catch(e){}
-
-          try {
-            var p = media.play();
-            if (p && p.catch) p.catch(function(){});
-          } catch(e){}
-        }
-
-        crossfadeToBack();
-
-        timer = setTimeout(function(){
-          playFrom(nextIndex, 0, playlist[nextIndex].duration);
-        }, Math.max(250, remaining * 1000));
-
-        if (item.type === "video"){
-          safety = setTimeout(function(){
-            playFrom(nextIndex, 0, playlist[nextIndex].duration);
-          }, Math.max(750, remaining * 1000 + 500));
-        }
-
-      }, function(errMsg){
-        showError(errMsg + "\n\nIf this fails on TB1, test opening the asset URL directly on TB1:\n" + absUrl(playlist[0].url));
-        timer = setTimeout(function(){
-          playFrom(nextIndex, 0, playlist[nextIndex].duration);
-        }, 1500);
+      return new Promise((resolve, reject) => {
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Image failed: " + item.url));
       });
     }
 
-    function start(){
-      var s = getSynced();
-      playFrom(s.index, s.elapsed, s.remaining);
+    if (item.type === "video"){
+      const vid = document.createElement("video");
+      vid.src = item.url;
+      vid.muted = true;
+      vid.playsInline = true;
+      vid.autoplay = false; // we will call play()
+      vid.preload = "auto";
+
+      return new Promise((resolve, reject) => {
+        vid.addEventListener("loadedmetadata", () => resolve(vid), { once:true });
+        vid.addEventListener("error", () => reject(new Error("Video failed: " + item.url)), { once:true });
+      });
     }
 
-    start();
-  </script>
-</body>
-</html>
+    return Promise.reject(new Error("Unknown type"));
+  }
+
+  function crossfadeToBack(){
+    // show back, then hide old front after transition
+    back.classList.add("show");
+    front.classList.remove("show");
+    swapLayers();
+  }
+
+  async function playFrom(index, elapsed, remaining){
+    clearTimers();
+
+    const item = playlist[index];
+
+    try {
+      const media = await buildMedia(item);
+      back.appendChild(media);
+
+      // Seek into video if needed
+      if (item.type === "video"){
+        const startAt = Math.max(0, Math.min(item.duration - 0.1, elapsed));
+        try { media.currentTime = startAt; } catch(e){}
+
+        // Start playback right before fade (so it’s “hot”)
+        const p = media.play();
+        if (p && p.catch) p.catch(()=>{ /* TB1 may block; muted helps */ });
+      }
+
+      // Fade with content ready (no black flash)
+      crossfadeToBack();
+
+      // Advance timing
+      const nextIndex = (index + 1) % playlist.length;
+
+      // Use our own timer (more reliable than onended on TB1)
+      timer = setTimeout(() => {
+        playFrom(nextIndex, 0, playlist[nextIndex].duration);
+      }, Math.max(250, remaining * 1000));
+
+      // Safety for video end (optional)
+      if (item.type === "video"){
+        safety = setTimeout(() => {
+          playFrom(nextIndex, 0, playlist[nextIndex].duration);
+        }, Math.max(250, remaining * 1000 + 500));
+      }
+
+    } catch (e){
+      showError(e.message);
+      // Skip quickly
+      const nextIndex = (index + 1) % playlist.length;
+      timer = setTimeout(() => playFrom(nextIndex, 0, playlist[nextIndex].duration), 1500);
+    }
+  }
+
+  function start(){
+    const s = getSynced();
+    playFrom(s.index, s.elapsed, s.remaining);
+  }
+
+  start();
+</script>
