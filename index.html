@@ -3,11 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=845, height=314, initial-scale=1.0">
-    <title>Novastar Player (Broadcast Sync)</title>
+    <title>Novastar Live Feed</title>
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
         #container { width: 845px; height: 314px; position: relative; }
-        img, video { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; object-fit: fill; }
+        
+        /* Ensure media fills the exact pixel dimensions */
+        img, video { 
+            width: 100%; 
+            height: 100%; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            display: none; 
+            object-fit: fill; 
+        }
         .active { display: block; }
     </style>
 </head>
@@ -17,9 +27,13 @@
         </div>
 
     <script>
-        // --- YOUR PLAYLIST ---
-        // IMPORTANT: Set the actual duration for the video!
-        var myAds = [
+        // ==========================================
+        //        YOUR LIVE FEED PLAYLIST
+        // ==========================================
+        // To add ads, copy a line and change the filename.
+        // filenames must match GitHub exactly (Case Sensitive!)
+        
+        var liveFeed = [
             { type: 'image', url: 'Applebox.jpg', duration: 10 },
             { type: 'image', url: 'Comcast.jpg', duration: 10 },
             { type: 'image', url: 'Feet_DR.jpg', duration: 10 }, 
@@ -32,37 +46,30 @@
             { type: 'image', url: 'Sun_Chevy.jpg', duration: 10 },
             { type: 'image', url: 'ad1.jpg', duration: 10 },
             
-            // CHANGE "15" BELOW TO THE EXACT LENGTH OF YOUR VIDEO
+            // ⚠️ SET THIS DURATION TO THE EXACT LENGTH OF YOUR VIDEO (Seconds)
             { type: 'video', url: 'Screen_2_1.mp4', duration: 15 } 
         ];
 
+        // ==========================================
+        //        ENGINE CODE (DO NOT TOUCH)
+        // ==========================================
         var container = document.getElementById('container');
         var currentIndex = 0;
 
-        // 1. CALCULATE START TIME BASED ON CLOCK
         function getSyncedStartIndex() {
             var totalLoopTime = 0;
-            
-            // Calculate total playlist length
-            myAds.forEach(item => {
-                // Safety: Treat 0 duration as 10s to prevent crash
-                if (!item.duration || item.duration <= 0) item.duration = 10;
-                totalLoopTime += item.duration;
-            });
+            liveFeed.forEach(item => { totalLoopTime += item.duration; });
 
-            // Get current time in seconds
+            // Get current Unix time in seconds
             var now = Math.floor(Date.now() / 1000);
             
-            // Find where we are in the loop (Modulo)
+            // Find our position in the global loop
             var timeIntoLoop = now % totalLoopTime;
             
             var accumulatedTime = 0;
-            for (var i = 0; i < myAds.length; i++) {
-                var itemDuration = myAds[i].duration;
-                
-                // If the current time falls inside this item's window
+            for (var i = 0; i < liveFeed.length; i++) {
+                var itemDuration = liveFeed[i].duration;
                 if (timeIntoLoop < accumulatedTime + itemDuration) {
-                    // Return the index and how much time is remaining for this specific ad
                     return { 
                         index: i, 
                         remaining: (accumulatedTime + itemDuration) - timeIntoLoop 
@@ -70,16 +77,18 @@
                 }
                 accumulatedTime += itemDuration;
             }
-            return { index: 0, remaining: myAds[0].duration };
+            return { index: 0, remaining: liveFeed[0].duration };
         }
 
         function playNext(firstRun = false, overrideDuration = null) {
-            var item = myAds[currentIndex];
-            
-            // Clear screen
-            container.innerHTML = '';
+            // Loop back to start if needed
+            if (currentIndex >= liveFeed.length) currentIndex = 0;
 
+            var item = liveFeed[currentIndex];
             var durationToPlay = overrideDuration || item.duration;
+
+            // Clear previous content
+            container.innerHTML = '';
 
             if (item.type === 'image') {
                 var img = document.createElement('img');
@@ -89,7 +98,6 @@
 
                 setTimeout(function() {
                     currentIndex++;
-                    if (currentIndex >= myAds.length) currentIndex = 0;
                     playNext();
                 }, durationToPlay * 1000);
             } 
@@ -97,25 +105,26 @@
                 var vid = document.createElement('video');
                 vid.src = item.url;
                 vid.className = 'active';
-                vid.muted = true;
+                vid.muted = true; // Required for auto-play
                 vid.autoplay = true;
                 vid.playsInline = true;
                 
-                // If we jumped into the middle of a video, try to seek (optional)
+                // If syncing mid-video, jump to the correct second
                 if (firstRun && overrideDuration) {
-                   vid.currentTime = item.duration - overrideDuration;
+                   var startAt = item.duration - overrideDuration;
+                   vid.currentTime = startAt;
                 }
 
-                // Fallback: Just play to end
+                // When video ends, go next
                 vid.onended = function() {
                     currentIndex++;
-                    if (currentIndex >= myAds.length) currentIndex = 0;
                     playNext();
                 };
                 
+                // Safety: If video breaks, skip it instantly
                 vid.onerror = function() {
+                    console.log("Video failed to load: " + item.url);
                     currentIndex++;
-                    if (currentIndex >= myAds.length) currentIndex = 0;
                     playNext();
                 };
                 
@@ -123,14 +132,10 @@
             }
         }
 
-        // Start the engine
+        // START THE LIVE FEED
         var startData = getSyncedStartIndex();
         currentIndex = startData.index;
-        
-        // Log for testing
-        console.log("Syncing to TV Mode... Starting at Index: " + currentIndex);
-        
-        // Start playing with the calculated remaining time for the first item
+        console.log("Live Feed Started. Jumped to Item Index: " + currentIndex);
         playNext(true, startData.remaining);
 
     </script>
